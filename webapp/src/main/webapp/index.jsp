@@ -1,2 +1,2 @@
-<h1> Hello, Welcome to Valaxy Technologies Fuck yourself!!!</h1>
+<h1> Hello, Welcome to Valaxy Technologies F yourself yooooooooooooooooooooooooooooooooooooo!!!</h1>
 

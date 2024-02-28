@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_laxingTon_hello_world_1709126307961-pr-trigger-input-set
+  identifier: Build_laxingTon_hello_world_1709126307961prtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: default_project
+  pipeline:
+    identifier: Build_laxingTon_hello_world_1709126307961
+    properties:
+      ci:
+        codebase:
+          build:
+            type: PR
+            spec:
+              number: <+trigger.prNumber>

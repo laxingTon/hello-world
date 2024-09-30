@@ -1,10 +1,10 @@
 import requests
 import logging
 import json
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(message)s')  # Custom format to remove INFO:__main__:
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
 # Custom exception for API errors
@@ -16,7 +16,7 @@ def load_config(filepath: str) -> dict:
     with open(filepath, 'r') as file:
         return json.load(file)
 
-def fetch_targets(org_id: str, api_token: str, targets_list: List[str]) -> Optional[List[str]]:
+def fetch_targets(org_id: str, api_token: str, targets_list: List[str]) -> Optional[Dict[str, str]]:
     """Fetch matching target IDs from the Snyk API."""
     url = f"https://api.snyk.io/rest/orgs/{org_id}/targets?version=2024-09-04"
     headers = {
@@ -31,8 +31,7 @@ def fetch_targets(org_id: str, api_token: str, targets_list: List[str]) -> Optio
 
     data = response.json()
     targets = [(target['id'], target['attributes']['display_name']) for target in data['data']]
-    matching_target_ids = [target[0] for target in targets if target[1] in targets_list]
-    return matching_target_ids
+    return {target[0]: target[1] for target in targets if target[1] in targets_list}
 
 def fetch_project_info(org_id: str, project_id: str, api_token: str) -> Optional[dict]:
     """Fetch project information from the Snyk API."""
@@ -72,19 +71,33 @@ def fetch_issues(org_id: str, api_token: str) -> List[Tuple[str, str, str]]:
             for issue in data['data'] if issue['type'] == 'issue']
 
 def check_high_critical_issues(org_id: str, api_token: str, targets_list: List[str]) -> str:
-    """Check for high/critical issues in specified targets."""
+    """Check for high/critical issues in specified targets and return results for all."""
     try:
-        matching_target_ids = fetch_targets(org_id, api_token, targets_list)
-        if not matching_target_ids:
+        matching_targets = fetch_targets(org_id, api_token, targets_list)
+        if not matching_targets:
             return "No matching targets found."
 
         issues = fetch_issues(org_id, api_token)
+        target_issue_map = {name: [] for name in matching_targets.values()}  # Prepare to map targets to found issues
+
         for issue_id, title, project_id in issues:
             project_info = fetch_project_info(org_id, project_id, api_token)
-            if project_info and project_info['target_id'] in matching_target_ids:
-                return "High/Critical Issue found for provided targets"
+            if project_info and project_info['target_id'] in matching_targets:
+                target_name = matching_targets[project_info['target_id']]
+                target_issue_map[target_name].append(title)
 
-        return "No high/critical issues found for provided targets"
+        # Prepare response message
+        found_targets = [target for target, issues in target_issue_map.items() if issues]
+        no_issue_targets = [target for target in matching_targets.values() if target not in found_targets]
+
+        response_parts = []
+        if found_targets:
+            response_parts.append(f'High/Critical Issues found for targets: {json.dumps(found_targets)}')
+        if no_issue_targets:
+            response_parts.append(f'No high/Critical Issues found for targets: {json.dumps(no_issue_targets)}')
+
+        return "\n".join(response_parts) if response_parts else "No high/critical issues found for any targets."
+
     except APIError as e:
         return str(e)
 

@@ -96,27 +96,38 @@ def fetch_project_info(org_id: str, project_id: str, api_token: str) -> Optional
     return project_info
 
 def fetch_issues(org_id: str, api_token: str, severity_list: List[str]) -> List[Tuple[str, str, str]]:
-    """Fetch issues from the Snyk API."""
-    if severity_list is None or severity_list.count == 0:
-        #default to critical and high
+    """Fetch issues from the Snyk API, handling pagination."""
+    if not severity_list or len(severity_list) == 0:
+        # Default to critical and high
         effective_severity_level = 'critical%2Chigh'
     else:
         effective_severity_level = '%2C'.join(severity_list)
 
+    issues = []
     url = f"https://api.snyk.io/rest/orgs/{org_id}/issues?limit=100&version=2024-09-04&effective_severity_level={effective_severity_level}"
     headers = {
         "Content-Type": "application/vnd.api+json",
         "Authorization": f"token {api_token}"
     }
 
-    response = requests.get(url, headers=headers, timeout=300)
-    if response.status_code != 200:
-        logger.error("Error fetching issues: %d, %s", response.status_code, response.text)
-        raise APIError("Failed to fetch issues")
+    while url:
+        response = requests.get(url, headers=headers, timeout=300)
+        if response.status_code != 200:
+            logger.error("Error fetching issues: %d, %s", response.status_code, response.text)
+            raise APIError("Failed to fetch issues")
 
-    data = response.json()
-    return [(issue['id'], issue['attributes']['title'], issue['relationships']['scan_item']['data']['id'])
-            for issue in data['data'] if issue['type'] == 'issue']
+        data = response.json()
+        # Collect issues from the current page
+        issues.extend([(issue['id'], issue['attributes']['title'], issue['relationships']['scan_item']['data']['id'])
+                       for issue in data['data'] if issue['type'] == 'issue'])
+        # Check for 'next' link in the response
+        next_link = data.get('links', {}).get('next')
+        if next_link:
+            # Ensure next_link is a full URL
+            url = f"https://api.snyk.io{next_link}"  # Combine with base URL
+        else:
+            url = None  # No more pages
+    return issues
 
 def check_severity_issues(org_id: str, api_token: str, targets_list: List[str], severity_list: List[str]) -> str:
     """Check for issues based on severity list in specified targets and return results for all."""
@@ -154,7 +165,9 @@ def check_high_critical_issues(org_id: str, api_token: str, targets_list: List[s
     try:
         matching_targets = fetch_targets(org_id, api_token, targets_list)
         if not matching_targets:
-            return "No matching targets found."
+            logger.info("No matching targets found.")
+            return 1
+
 
         issues = fetch_issues(org_id, api_token, ['critical', 'high'])
         target_issue_map = {name: [] for name in matching_targets.values()}  # Prepare to map targets to found issues
@@ -175,7 +188,7 @@ def check_high_critical_issues(org_id: str, api_token: str, targets_list: List[s
         if no_issue_targets:
             response_parts.append(f'No high/Critical Issues found for targets: {json.dumps(no_issue_targets)}')
 
-        print("\n".join(response_parts) if response_parts else "No high/critical issues found for any targets.")
+        logger.info("\n".join(response_parts) if response_parts else "No high/critical issues found for any targets.")
 
         found_issue = False
 
@@ -185,7 +198,7 @@ def check_high_critical_issues(org_id: str, api_token: str, targets_list: List[s
                 found_issue = True
                 break  # Exit early if an issue is found
 
-        return 1 if found_issue else 0        
+        return 1 if found_issue else 0
 
     except APIError as e:
         return str(e)

@@ -1,20 +1,61 @@
-import requests
+#!/usr/bin/env python
+# pylint: disable=line-too-long
+"""
+    File: check_snyk_api.py
+    Creator: Lekshmanan Sivathanu <lekshmanan.sivathanu@infinite.com>
+    Updated: Cheryl Foster <fosterc@vystarcu.org>
+    Version: 0.0.2
+
+    Purpose of this script is to query Snyk.io for a given organization, target and project
+    to determine if there are any critical or high errors reported
+"""
+import argparse
 import logging
 import json
-import sys
+from pathlib import Path
 from typing import List, Tuple, Optional, Dict
+import requests
+import sys
+
+# Configure ArgParser
+parser = argparse.ArgumentParser(
+    prog="check_snyk_api",
+    description="Query Snyk.io for security scanning status for a given organization, target and projects, to determine if errors reported",
+    epilog="Values Pass as arguments will take precedence over values in a config file (if provided)",
+    )
+
+parser.add_argument("-o", "--orgId", help="Snyk Organization ID")
+parser.add_argument("-t", "--token", help="Snyk API token for Authorization")
+parser.add_argument("-l", "--targets", help="Comma delimited list of targets to query for")
+parser.add_argument("-s", "--severity", help="Comma delimited list severity Levels to check for: critical,high,medium,low")
+parser.add_argument("-c", "--config", help="path to config file with orgId, token, target list and severity list")
+parser.add_argument("-d", "--debug", action="store_true", help="Turn on debug logging")
+
+args = parser.parse_args()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(message)s')
+if args.debug:
+    logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+else:
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
+logger.debug('Debug Logging turned on')
+
+# Process Arguments
+if args.config is not None:
+    configPath = Path(args.config)
+    if not configPath.exists():
+        logger.error("%s does not exist", args.config)
+        raise SystemExit(1)
 
 # Custom exception for API errors
 class APIError(Exception):
+    """APIError class for handling exceptions"""
     pass
 
 def load_config(filepath: str) -> dict:
     """Load configuration from a JSON file."""
-    with open(filepath, 'r') as file:
+    with open(filepath, 'r', encoding="utf-8") as file:
         return json.load(file)
 
 def fetch_targets(org_id: str, api_token: str, targets_list: List[str]) -> Optional[Dict[str, str]]:
@@ -25,9 +66,9 @@ def fetch_targets(org_id: str, api_token: str, targets_list: List[str]) -> Optio
         "Authorization": f"token {api_token}"
     }
 
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=300)
     if response.status_code != 200:
-        logger.error(f"Error fetching targets: {response.status_code}, {response.text}")
+        logger.error("Error fetching targets: %d, %s", response.status_code, response.text)
         raise APIError("Failed to fetch targets")
 
     data = response.json()
@@ -42,43 +83,100 @@ def fetch_project_info(org_id: str, project_id: str, api_token: str) -> Optional
         "Authorization": f"token {api_token}"
     }
 
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=300)
     if response.status_code != 200:
-        logger.error(f"Error fetching project info: {response.status_code}, {response.text}")
+        logger.error("Error fetching project info: %d, %s", response.status_code, response.text)
         raise APIError("Failed to fetch project info")
 
     data = response.json()
-    return {
+    project_info = {
         "project_name": data['data']['attributes']['name'],
         "target_id": data['data']['relationships']['target']['data']['id']
     }
+    return project_info
 
-def fetch_issues(org_id: str, api_token: str) -> List[Tuple[str, str, str]]:
+def fetch_issues(org_id: str, api_token: str, severity_list: List[str]) -> List[Tuple[str, str, str]]:
     """Fetch issues from the Snyk API."""
-    url = f"https://api.snyk.io/rest/orgs/{org_id}/issues?version=2024-09-04&effective_severity_level=critical%2Chigh"
+    if severity_list is None or severity_list.count == 0:
+        #default to critical and high
+        effective_severity_level = 'critical%2Chigh'
+    else:
+        effective_severity_level = '%2C'.join(severity_list)
+
+    url = f"https://api.snyk.io/rest/orgs/{org_id}/issues?limit=100&version=2024-09-04&effective_severity_level={effective_severity_level}"
     headers = {
         "Content-Type": "application/vnd.api+json",
         "Authorization": f"token {api_token}"
     }
 
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=300)
     if response.status_code != 200:
-        logger.error(f"Error fetching issues: {response.status_code} - {response.text}")
+        logger.error("Error fetching issues: %d, %s", response.status_code, response.text)
         raise APIError("Failed to fetch issues")
 
     data = response.json()
     return [(issue['id'], issue['attributes']['title'], issue['relationships']['scan_item']['data']['id'])
             for issue in data['data'] if issue['type'] == 'issue']
 
-def check_high_critical_issues(org_id: str, api_token: str, targets_list: List[str]) -> int:
-    """Check for high/critical issues in specified targets."""
+def check_severity_issues(org_id: str, api_token: str, targets_list: List[str], severity_list: List[str]) -> str:
+    """Check for issues based on severity list in specified targets and return results for all."""
     try:
         matching_targets = fetch_targets(org_id, api_token, targets_list)
-
         if not matching_targets:
-            return 0  # No matching targets found
+            return "No matching targets found."
 
-        issues = fetch_issues(org_id, api_token)
+        issues = fetch_issues(org_id, api_token, severity_list)
+        target_issue_map = {name: [] for name in matching_targets.values()}  # Prepare to map targets to found issues
+
+        for issue_id, title, project_id in issues:
+            project_info = fetch_project_info(org_id, project_id, api_token)
+            if project_info and project_info['target_id'] in matching_targets:
+                target_name = matching_targets[project_info['target_id']]
+                target_issue_map[target_name].append(title)
+
+        # Prepare response message
+        found_targets = [target for target, issues in target_issue_map.items() if issues]
+        no_issue_targets = [target for target in matching_targets.values() if target not in found_targets]
+
+        response_parts = []
+        if found_targets:
+            response_parts.append(f'Issues found for targets: {json.dumps(found_targets)}')
+        if no_issue_targets:
+            response_parts.append(f'No Issues found for targets: {json.dumps(no_issue_targets)}')
+
+        return "\n".join(response_parts) if response_parts else "No high/critical issues found for any targets."
+
+    except APIError as e:
+        return str(e)
+
+def check_high_critical_issues(org_id: str, api_token: str, targets_list: List[str]) -> str:
+    """Check for high/critical issues in specified targets and return results for all."""
+    try:
+        matching_targets = fetch_targets(org_id, api_token, targets_list)
+        if not matching_targets:
+            return "No matching targets found."
+
+        issues = fetch_issues(org_id, api_token, ['critical', 'high'])
+        target_issue_map = {name: [] for name in matching_targets.values()}  # Prepare to map targets to found issues
+
+        for issue_id, title, project_id in issues:
+            project_info = fetch_project_info(org_id, project_id, api_token)
+            if project_info and project_info['target_id'] in matching_targets:
+                target_name = matching_targets[project_info['target_id']]
+                target_issue_map[target_name].append(title)
+
+        # Prepare response message
+        found_targets = [target for target, issues in target_issue_map.items() if issues]
+        no_issue_targets = [target for target in matching_targets.values() if target not in found_targets]
+
+        response_parts = []
+        if found_targets:
+            response_parts.append(f'High/Critical Issues found for targets: {json.dumps(found_targets)}')
+        if no_issue_targets:
+            response_parts.append(f'No high/Critical Issues found for targets: {json.dumps(no_issue_targets)}')
+
+        print("\n".join(response_parts) if response_parts else "No high/critical issues found for any targets.")
+
         found_issue = False
 
         for issue_id, title, project_id in issues:
@@ -87,18 +185,39 @@ def check_high_critical_issues(org_id: str, api_token: str, targets_list: List[s
                 found_issue = True
                 break  # Exit early if an issue is found
 
-        return 1 if found_issue else 0
+        return 1 if found_issue else 0        
 
-    except APIError:
-        return 100  # Error in API calls
+    except APIError as e:
+        return str(e)
 
 if __name__ == "__main__":
-    # Load configuration
-    config = load_config('config.json')  # Replace with your config file path
-    org_id = config['org_id']
-    api_token = config['api_token']
-    targets_list = config['targets_list']
 
-    exit_code = check_high_critical_issues(org_id, api_token, targets_list)
-    print(exit_code)
-    sys.exit(exit_code)
+    ORG_ID: str
+    API_TOKEN: str
+    TARGETS_LIST: List[str]
+    SEVERITY_LIST: List[str]
+
+    # Load configuration
+    if args.config is not None:
+        config_file = args.config
+        config = load_config(config_file)  # Replace with your config file path
+        ORG_ID = config['org_id']
+        API_TOKEN = config['api_token']
+        TARGETS_LIST = config['targets_list']
+        SEVERITY_LIST = config['severity_list']
+
+    #Override/Set vars from arguments
+    if args.orgId is not None:
+        ORG_ID= args.orgId
+    if args.token is not None:
+        API_TOKEN = args.token
+    if args.targets is not None:
+        #need to split the value by ,
+        TARGETS_LIST = args.targets.split(",")
+    if args.severity is not None:
+        #need to split the value by ,
+        SEVERITY_LIST = args.severity.split(",")
+
+    MESSAGE = check_high_critical_issues(ORG_ID, API_TOKEN, TARGETS_LIST)
+    logger.info(MESSAGE)
+    sys.exit(MESSAGE)

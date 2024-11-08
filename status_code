@@ -79,7 +79,6 @@ def fetch_targets(org_id: str, api_token: str, targets_list: List[str]) -> Optio
             raise APIError("Failed to fetch targets")
 
         data = response.json()
-        #print(data)
 
         # Collect targets from the current page
         page_targets = [
@@ -87,7 +86,6 @@ def fetch_targets(org_id: str, api_token: str, targets_list: List[str]) -> Optio
             for target in data['data']
         ]
         targets.extend(page_targets)
-        #print(targets)
 
         # Check for 'next' link in the response to determine if there are more pages
         next_link = data.get('links', {}).get('next')
@@ -161,14 +159,16 @@ def fetch_issues(org_id: str, api_token: str, severity_list: List[str]) -> List[
 def check_severity_issues(org_id: str, api_token: str, targets_list: List[str], severity_list: List[str]) -> str:
     """Check for issues based on severity list in specified targets and return results for all."""
     try:
+        # Join all severity levels in the list into a comma-separated string
+        severity_label = ', '.join(severity_list)  # No default, it will be empty if severity_list is empty
+
         matching_targets = fetch_targets(org_id, api_token, targets_list)
         if not matching_targets:
             logger.info("No matching targets found.")
             return 1
 
         issues = fetch_issues(org_id, api_token, severity_list)
-        target_issue_map = {name: [] for name in matching_targets.values()}  # Prepare to map targets to found issues 
-
+        target_issue_map = {name: [] for name in matching_targets.values()}  # Prepare to map targets to found issues
 
         for issue_id, title, project_id in issues:
             project_info = fetch_project_info(org_id, project_id, api_token)
@@ -182,11 +182,11 @@ def check_severity_issues(org_id: str, api_token: str, targets_list: List[str], 
 
         response_parts = []
         if found_targets:
-            response_parts.append(f'High/Critical Issues found for targets: {json.dumps(found_targets)}')
+            response_parts.append(f'{severity_label} Issues found for targets: {json.dumps(found_targets)}')
         if no_issue_targets:
-            response_parts.append(f'No high/Critical Issues found for targets: {json.dumps(no_issue_targets)}')
+            response_parts.append(f'No {severity_label} Issues found for targets: {json.dumps(no_issue_targets)}')
 
-        logger.info("\n".join(response_parts) if response_parts else "No high/critical issues found for any targets.")
+        logger.info("\n".join(response_parts) if response_parts else f"No {severity_label} issues found for any targets.")
 
         found_issue = False
 
@@ -200,6 +200,7 @@ def check_severity_issues(org_id: str, api_token: str, targets_list: List[str], 
 
     except APIError as e:
         return str(e)
+
 
 def check_high_critical_issues(org_id: str, api_token: str, targets_list: List[str]) -> str:
     """Check for high/critical issues in specified targets and return results for all."""

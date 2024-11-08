@@ -59,21 +59,51 @@ def load_config(filepath: str) -> dict:
         return json.load(file)
 
 def fetch_targets(org_id: str, api_token: str, targets_list: List[str]) -> Optional[Dict[str, str]]:
-    """Fetch matching target IDs from the Snyk API."""
-    url = f"https://api.snyk.io/rest/orgs/{org_id}/targets?version=2024-09-04"
+    """Fetch matching target IDs from the Snyk API, with pagination support."""
+
+    # Start with the initial URL (you can adjust 'limit' as needed)
+    url = f"https://api.snyk.io/rest/orgs/{org_id}/targets?limit=10&version=2024-09-04"
     headers = {
         "Content-Type": "application/vnd.api+json",
         "Authorization": f"token {api_token}"
     }
 
-    response = requests.get(url, headers=headers, timeout=300)
-    if response.status_code != 200:
-        logger.error("Error fetching targets: %d, %s", response.status_code, response.text)
-        raise APIError("Failed to fetch targets")
+    targets = []
 
-    data = response.json()
-    targets = [(target['id'], target['attributes']['display_name']) for target in data['data']]
-    return {target[0]: target[1] for target in targets if target[1] in targets_list}
+    while url:
+        # Make the request to the API
+        response = requests.get(url, headers=headers, timeout=300)
+
+        if response.status_code != 200:
+            logger.error("Error fetching targets: %d, %s", response.status_code, response.text)
+            raise APIError("Failed to fetch targets")
+
+        data = response.json()
+        #print(data)
+
+        # Collect targets from the current page
+        page_targets = [
+            (target['id'], target['attributes']['display_name'])
+            for target in data['data']
+        ]
+        targets.extend(page_targets)
+        #print(targets)
+
+        # Check for 'next' link in the response to determine if there are more pages
+        next_link = data.get('links', {}).get('next')
+        if next_link:
+            # Construct the full URL for the next page
+            url = f"https://api.snyk.io{next_link}"  # Combine with the base URL
+        else:
+            url = None  # No more pages
+
+    # Filter the results based on the provided targets_list
+    filtered_targets = {
+        target[0]: target[1] for target in targets if target[1] in targets_list
+    }
+
+    return filtered_targets
+
 
 def fetch_project_info(org_id: str, project_id: str, api_token: str) -> Optional[dict]:
     """Fetch project information from the Snyk API."""

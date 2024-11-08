@@ -234,10 +234,4 @@ if __name__ == "__main__":
     MESSAGE = check_high_critical_issues(ORG_ID, API_TOKEN, TARGETS_LIST)
     logger.info(MESSAGE)
     sys.exit(MESSAGE)
-{
-    "org_id": "8d40c7f-5e12-4ea0-9bd7-036825a61370",
-    "api_token": "d4e99f7-d78e-4ddd-9a1d-d0bae90bab93",
-    "targets_list": ["/Digital Platform/platform-account-api"],
-    "severity_list": ["critical","high"]
-}
 

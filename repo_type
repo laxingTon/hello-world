@@ -1,0 +1,112 @@
+import requests
+from base64 import b64encode
+
+# Configuration
+org_name = '<YOUR_ORG_NAME>'           # Replace with your Azure DevOps organization name
+personal_access_token = '<YOUR_PAT>'   # Your personal access token
+
+# Azure DevOps API URLs
+projects_url = f'https://dev.azure.com/{org_name}/_apis/projects?api-version=7.1-preview.1'
+
+# Authentication header
+headers = {
+    'Content-Type': 'application/json',
+    'Authorization': f'Basic {b64encode(f":{personal_access_token}".encode()).decode()}'
+}
+
+# List of files that are indicators of project types
+indicators = {
+    'Node.js': 'package.json',
+    'Java (Maven)': 'pom.xml',
+    'Java (Gradle)': 'build.gradle',
+    'Python': 'requirements.txt',
+    'C# (.NET)': '.csproj',
+    'Ruby': 'Gemfile',
+    'Go': 'go.mod',
+    'PHP': 'composer.json'
+}
+
+# Function to get all projects
+def get_all_projects():
+    projects = []
+    url = projects_url
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            projects.extend(data['value'])
+            url = data.get('continuationToken', None)  # Pagination handling
+        else:
+            print(f"Failed to retrieve projects: {response.status_code}, {response.text}")
+            break
+    return projects
+
+# Function to get all repositories for a specific project
+def get_repositories_for_project(project_id):
+    repos_url = f'https://dev.azure.com/{org_name}/{project_id}/_apis/git/repositories?api-version=7.1-preview.1'
+    repos = []
+    url = repos_url
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            repos.extend(data['value'])
+            url = data.get('continuationToken', None)  # Pagination handling
+        else:
+            print(f"Failed to retrieve repositories for project {project_id}: {response.status_code}, {response.text}")
+            break
+    return repos
+
+# Function to get all files in a repository and detect the project type
+def get_all_files_and_detect_project_type(repo_name, project_id):
+    repo_url = f'https://dev.azure.com/{org_name}/{project_id}/_apis/git/repositories/{repo_name}/items?versionDescriptor.version=main&scopePath=/&recursionLevel=Full&api-version=7.1-preview.1'
+    files = []
+    url = repo_url
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            files.extend(data['value'])
+            url = data.get('continuationToken', None)  # Pagination handling
+        else:
+            print(f"Failed to retrieve files for repo {repo_name}: {response.status_code}, {response.text}")
+            break
+    
+    # Detect project type based on files
+    project_type = detect_project_type(files)
+    
+    return project_type
+
+# Function to check for project type based on file presence
+def detect_project_type(files):
+    for file in files:
+        file_path = file['path']
+        print(f"Found file: {file_path}")  # Print the full path of each file
+        for key, value in indicators.items():
+            if file_path.endswith(value):
+                return key  # Return the project type as soon as a match is found
+    return None  # Return None if no project type was found
+
+# Main logic
+def main():
+    projects = get_all_projects()
+    for project in projects:
+        project_name = project['name']
+        project_id = project['id']
+        print(f"Checking repositories for project: {project_name}")
+        
+        repos = get_repositories_for_project(project_id)
+        for repo in repos:
+            repo_name = repo['name']
+            print(f"  Checking repository: {repo_name}")
+            
+            # Get files in the repository and detect project type
+            project_type = get_all_files_and_detect_project_type(repo_name, project_id)
+            
+            if project_type:
+                print(f"    Detected project type: {project_type}")
+            else:
+                print("    Project type could not be determined.")
+                
+if __name__ == "__main__":
+    main()

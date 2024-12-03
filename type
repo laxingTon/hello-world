@@ -8,8 +8,8 @@ repo_name = '<YOUR_REPO_NAME>'         # Replace with your repository name
 branch_name = '<BRANCH_NAME>'          # The branch you want to access, e.g., 'main'
 personal_access_token = '<YOUR_PAT>'   # Your personal access token
 
-# Construct the URL for the API request to list items in the root directory
-url = f'https://dev.azure.com/{org_name}/{project_name}/_apis/git/repositories/{repo_name}/items?scopePath=/&versionDescriptor.version={branch_name}&api-version=7.1-preview.1'
+# Construct the URL for the API request to list items in the repository (all directories)
+url = f'https://dev.azure.com/{org_name}/{project_name}/_apis/git/repositories/{repo_name}/items?versionDescriptor.version={branch_name}&api-version=7.1-preview.1'
 
 # Make the request with authentication
 headers = {
@@ -17,39 +17,53 @@ headers = {
     'Authorization': f'Basic {b64encode(f":{personal_access_token}".encode()).decode()}'
 }
 
-response = requests.get(url, headers=headers)
+# Function to get all files, including pagination handling
+def get_all_files(url, headers):
+    all_items = []
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            all_items.extend(data)
+            url = data.get('continuationToken', None)  # If continuation token exists, use it to fetch more
+        else:
+            print(f"Failed to retrieve files: {response.status_code}, {response.text}")
+            break
+    return all_items
 
-# Check if the request was successful
-if response.status_code == 200:
-    # Parse the response JSON to extract file/directory information
-    items = response.json()
-    
-    # List of files that are indicators of project types
-    indicators = {
-        'Node.js': 'package.json',
-        'Java (Maven)': 'pom.xml',
-        'Java (Gradle)': 'build.gradle',
-        'Python': 'requirements.txt',
-        'C# (.NET)': '.csproj',
-        'Ruby': 'Gemfile',
-        'Go': 'go.mod',
-        'PHP': 'composer.json'
-    }
+# Get all files recursively
+all_files = get_all_files(url, headers)
 
-    # Check for project type based on file presence
+# List of files that are indicators of project types
+indicators = {
+    'Node.js': 'package.json',
+    'Java (Maven)': 'pom.xml',
+    'Java (Gradle)': 'build.gradle',
+    'Python': 'requirements.txt',
+    'C# (.NET)': '.csproj',
+    'Ruby': 'Gemfile',
+    'Go': 'go.mod',
+    'PHP': 'composer.json'
+}
+
+# Function to check for project type based on file presence
+def detect_project_type(files):
     project_type = None
-    for item in items:
-        file_path = item['path']
+    for file in files:
+        file_path = file['path']
+        print(f"Found file: {file_path}")
         for key, value in indicators.items():
             if file_path.endswith(value):
                 project_type = key
                 break
         if project_type:
             break
+    return project_type
 
-    if project_type:
-        print(f"Detected project type: {project_type}")
-    else:
-        print("Project type could not be determined.")
+# Detect project type based on the files
+project_type = detect_project_type(all_files)
+
+if project_type:
+    print(f"Detected project type: {project_type}")
 else:
-    print(f"Failed to retrieve directory listing: {response.status_code}, {response.text}")
+    print("Project type could not be determined.")

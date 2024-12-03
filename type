@@ -9,7 +9,7 @@ branch_name = '<BRANCH_NAME>'          # The branch you want to access, e.g., 'm
 personal_access_token = '<YOUR_PAT>'   # Your personal access token
 
 # Construct the URL for the API request to list items in the repository (all directories)
-url = f'https://dev.azure.com/{org_name}/{project_name}/_apis/git/repositories/{repo_name}/items?versionDescriptor.version={branch_name}&api-version=7.1-preview.1'
+url = f'https://dev.azure.com/{org_name}/{project_name}/_apis/git/repositories/{repo_name}/items?versionDescriptor.version={branch_name}&scopePath=/&recursionLevel=Full&api-version=7.1-preview.1'
 
 # Make the request with authentication
 headers = {
@@ -24,7 +24,7 @@ def get_all_files(url, headers):
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
-            all_items.extend(data)
+            all_items.extend(data['value'])
             url = data.get('continuationToken', None)  # If continuation token exists, use it to fetch more
         else:
             print(f"Failed to retrieve files: {response.status_code}, {response.text}")
@@ -51,7 +51,7 @@ def detect_project_type(files):
     project_type = None
     for file in files:
         file_path = file['path']
-        print(f"Found file: {file_path}")
+        print(f"Found file: {file_path}")  # Print the full path of each file
         for key, value in indicators.items():
             if file_path.endswith(value):
                 project_type = key

@@ -1,0 +1,55 @@
+import requests
+from base64 import b64encode
+
+# Configuration
+org_name = '<YOUR_ORG_NAME>'           # Replace with your Azure DevOps organization name
+project_name = '<YOUR_PROJECT_NAME>'   # Replace with your Azure DevOps project name
+repo_name = '<YOUR_REPO_NAME>'         # Replace with your repository name
+branch_name = '<BRANCH_NAME>'          # The branch you want to access, e.g., 'main'
+personal_access_token = '<YOUR_PAT>'   # Your personal access token
+
+# Construct the URL for the API request to list items in the root directory
+url = f'https://dev.azure.com/{org_name}/{project_name}/_apis/git/repositories/{repo_name}/items?scopePath=/&versionDescriptor.version={branch_name}&api-version=7.1-preview.1'
+
+# Make the request with authentication
+headers = {
+    'Content-Type': 'application/json',
+    'Authorization': f'Basic {b64encode(f":{personal_access_token}".encode()).decode()}'
+}
+
+response = requests.get(url, headers=headers)
+
+# Check if the request was successful
+if response.status_code == 200:
+    # Parse the response JSON to extract file/directory information
+    items = response.json()
+    
+    # List of files that are indicators of project types
+    indicators = {
+        'Node.js': 'package.json',
+        'Java (Maven)': 'pom.xml',
+        'Java (Gradle)': 'build.gradle',
+        'Python': 'requirements.txt',
+        'C# (.NET)': '.csproj',
+        'Ruby': 'Gemfile',
+        'Go': 'go.mod',
+        'PHP': 'composer.json'
+    }
+
+    # Check for project type based on file presence
+    project_type = None
+    for item in items:
+        file_path = item['path']
+        for key, value in indicators.items():
+            if file_path.endswith(value):
+                project_type = key
+                break
+        if project_type:
+            break
+
+    if project_type:
+        print(f"Detected project type: {project_type}")
+    else:
+        print("Project type could not be determined.")
+else:
+    print(f"Failed to retrieve directory listing: {response.status_code}, {response.text}")

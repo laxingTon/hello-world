@@ -1,0 +1,82 @@
+import os
+import yaml
+from azure.devops.connection import Connection
+from msrest.authentication import BasicAuthentication
+from azure.devops.v7_1.git.git_client import GitClient
+from azure.devops.v7_1.git.models import GitItem
+
+# Configuration
+org_name = '<YOUR_ORG_NAME>'           # Replace with your Azure DevOps organization name
+project_name = '<YOUR_PROJECT_NAME>'   # Replace with your Azure DevOps project name
+repo_name = '<YOUR_REPO_NAME>'         # Replace with your repository name
+branch_name = '<BRANCH_NAME>'          # The branch you want to access, e.g., 'main'
+personal_access_token = '<YOUR_PAT>'   # Your personal access token
+
+# Azure DevOps connection setup
+credentials = BasicAuthentication('', personal_access_token)
+connection = Connection(base_url=f'https://dev.azure.com/{org_name}', creds=credentials)
+
+# Git client to interact with repositories
+git_client = connection.clients.get_git_client()
+
+# Function to get all files in the repository
+def get_all_files(repo_name, branch_name):
+    all_items = []
+    continuation_token = None
+
+    while True:
+        # Fetch items (files) from the repo
+        items = git_client.get_items(
+            repository_id=repo_name,
+            scope_path='/',  # Root directory
+            version_descriptor={'version': branch_name},
+            recursion_level='Full',  # Retrieve all files
+            continuation_token=continuation_token
+        )
+        all_items.extend(items)
+
+        # Check for continuation token (pagination)
+        continuation_token = items.continuation_token
+        if not continuation_token:
+            break
+
+    return all_items
+
+# Function to read the YAML file and extract project types
+def get_project_types_from_yaml(files):
+    # Look for the YAML file
+    yaml_file_path = '/project_type.yml'
+    for file in files:
+        if file.path == yaml_file_path:
+            print(f"Found YAML file: {yaml_file_path}")
+            # Now read the YAML file content
+            content = git_client.get_item_content(
+                repository_id=repo_name,
+                path=yaml_file_path,
+                version_descriptor={'version': branch_name}
+            )
+            try:
+                yaml_content = content.decode('utf-8')  # Decode the content as a string
+                project_data = yaml.safe_load(yaml_content)
+                return project_data.get('applications', [])
+            except yaml.YAMLError as e:
+                print(f"Error reading YAML content: {e}")
+            break
+    return []
+
+# Main logic
+def main():
+    # Get all files from the repo
+    all_files = get_all_files(repo_name, branch_name)
+
+    # Get project types from the YAML file
+    applications = get_project_types_from_yaml(all_files)
+
+    if applications:
+        for app in applications:
+            print(f"Application: {app['name']} - Project Type: {app['project_type']}")
+    else:
+        print("No project type information found in the repository.")
+
+if __name__ == "__main__":
+    main()

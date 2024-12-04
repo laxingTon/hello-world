@@ -42,31 +42,19 @@ connection = Connection(base_url=organization_url, creds=credentials)
 # Git client to interact with repositories
 git_client = connection.clients.get_git_client()
 
-# Function to fetch repository files (recursive) and find the project type in project_type.yml
+# Function to fetch repository files and find the project type in project_type.yml
 def get_project_type_from_repo(repo_name, branch_name):
-    all_files = []
-    continuation_token = None
-
-    # Get all files from the repository with pagination
-    while True:
-        items = git_client.get_items(
-            repository_id=repo_name,
-            scope_path='/',  # Root directory
-            version_descriptor={'version': branch_name},
-            recursion_level='Full',
-            continuation_token=continuation_token
-        )
-
-        all_files.extend(items)
-
-        # Check for pagination
-        continuation_token = items.continuation_token
-        if not continuation_token:
-            break
+    # Get all files from the repository (no pagination)
+    items = git_client.get_items(
+        repository_id=repo_name,
+        scope_path='/',  # Root directory
+        version_descriptor={'version': branch_name},
+        recursion_level='Full',  # Get all files in all subdirectories
+    )
 
     # Look for the YAML file containing project types
     yaml_file_path = '/project_type.yml'
-    for file in all_files:
+    for file in items:
         if file.path == yaml_file_path:
             # Fetch the content of the YAML file
             content = git_client.get_item_content(
@@ -96,3 +84,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

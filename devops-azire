@@ -1,27 +1,26 @@
 #!/usr/bin/env python
 # pylint: disable=line-too-long
 """
-    Python Script to Get Service Connection information for all projects
+    Python Script to Get Project Type Information from Azure DevOps Repositories
 """
 import argparse
 import logging
-import pprint
+import yaml
 from azure.devops.connection import Connection
 from msrest.authentication import BasicAuthentication
 
 # Configure ArgParser
 parser = argparse.ArgumentParser(
-    prog="ado_service_connection.py",
-    description="Query Azure DevOps for Service Connections",
+    prog="ado_project_type.py",
+    description="Query Azure DevOps for Project Type Information from Repositories",
     epilog="",
-    )
+)
 
 parser.add_argument("-o", "--org", help="Azure Devops Organization", default="vcuvs")
 parser.add_argument("-T", "--token", help="ADO Personal Access Token for Authorization")
-parser.add_argument("-a", "--authSchemes", help="AuthSchemes to search for (comma delimited)", default=None)
-parser.add_argument("-t", "--type", help="Service Connection Type to search for", default=None)
+parser.add_argument("--repo-name", help="Azure DevOps Repo name to check for project types", required=True)
+parser.add_argument("--branch", help="Branch name to check (e.g., 'main')", default="main")
 parser.add_argument("-d", "--debug", action="store_true", help="Turn on debug logging")
-
 args = parser.parse_args()
 
 # Configure logging
@@ -32,42 +31,67 @@ else:
 logger = logging.getLogger(__name__)
 logger.debug('Debug Logging turned on')
 
-
-
 organization = args.org
 personal_access_token = args.token
 organization_url = f'https://dev.azure.com/{organization}'
 
+# Authenticate with Azure DevOps
 credentials = BasicAuthentication('', personal_access_token)
 connection = Connection(base_url=organization_url, creds=credentials)
 
-projectIdList = []
-projectMap = {}
+# Git client to interact with repositories
+git_client = connection.clients.get_git_client()
 
-core_client = connection.clients.get_core_client()
-get_projects_response = core_client.get_projects()
+# Function to fetch repository files (recursive) and find the project type in project_type.yml
+def get_project_type_from_repo(repo_name, branch_name):
+    all_files = []
+    continuation_token = None
 
-if get_projects_response is not None:
-    for project in get_projects_response:
-        projectIdList.append(project.id)
-        projectMap[project.id]=project.name
-        # pprint.pprint(f"{project.id}:{project.name}")
+    # Get all files from the repository
+    while True:
+        items = git_client.get_items(
+            repository_id=repo_name,
+            scope_path='/',  # Root directory
+            version_descriptor={'version': branch_name},
+            recursion_level='Full',
+            continuation_token=continuation_token
+        )
+        all_files.extend(items)
 
-se_client = connection.clients.get_service_endpoint_client()
-seMap = {}
+        # Check for pagination
+        continuation_token = items.continuation_token
+        if not continuation_token:
+            break
 
+    # Look for the YAML file containing project types
+    yaml_file_path = '/project_type.yml'
+    for file in all_files:
+        if file.path == yaml_file_path:
+            # Fetch the content of the YAML file
+            content = git_client.get_item_content(
+                repository_id=repo_name,
+                path=yaml_file_path,
+                version_descriptor={'version': branch_name}
+            )
+            try:
+                yaml_content = content.decode('utf-8')
+                project_data = yaml.safe_load(yaml_content)
+                return project_data.get('applications', [])
+            except yaml.YAMLError as e:
+                logger.error(f"Error reading YAML content: {e}")
+            break
+    return []
 
-if args.authSchemes is None:
-    ARGS_AUTH_SCHEMES = None
-else:
-    ARGS_AUTH_SCHEMES = args.authSchemes.split(',')
+# Main logic
+def main():
+    # Fetch project types from the repo's YAML configuration
+    applications = get_project_type_from_repo(args.repo_name, args.branch)
 
+    if applications:
+        for app in applications:
+            print(f"Application: {app['name']} - Project Type: {app['project_type']}")
+    else:
+        print("No project type information found in the repository.")
 
-for prjId in projectIdList:
-    get_service_endpoints_response = se_client.get_service_endpoints(project=prjId, type=args.type, auth_schemes=ARGS_AUTH_SCHEMES)
-    if get_service_endpoints_response is not None:
-        seMap[projectMap[prjId]] = []
-        for se in get_service_endpoints_response:
-            seMap[projectMap[prjId]].append([se.name,se.type,se.authorization.scheme,se.authorization.parameters])
-
-pprint.pprint(seMap)
+if __name__ == "__main__":
+    main()

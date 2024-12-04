@@ -1,0 +1,106 @@
+import requests
+from base64 import b64encode
+
+# Configuration
+org_name = '<YOUR_ORG_NAME>'           # Replace with your Azure DevOps organization name
+personal_access_token = '<YOUR_PAT>'   # Your personal access token
+
+# Azure DevOps API URLs
+projects_url = f'https://dev.azure.com/{org_name}/_apis/projects?api-version=7.1-preview.1'
+pipelines_url_template = 'https://dev.azure.com/{org_name}/{project_id}/_apis/pipelines?api-version=7.1-preview.1'
+
+# Authentication header
+headers = {
+    'Content-Type': 'application/json',
+    'Authorization': f'Basic {b64encode(f":{personal_access_token}".encode()).decode()}'
+}
+
+# Function to get all projects
+def get_all_projects():
+    projects = []
+    url = projects_url
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            projects.extend(data['value'])
+            url = data.get('continuationToken', None)  # Pagination handling
+        else:
+            print(f"Failed to retrieve projects: {response.status_code}, {response.text}")
+            break
+    return projects
+
+# Function to get all pipelines for a specific project
+def get_pipelines_for_project(project_id):
+    pipelines = []
+    pipelines_url = pipelines_url_template.format(org_name=org_name, project_id=project_id)
+    url = pipelines_url
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            pipelines.extend(data['value'])
+            url = data.get('continuationToken', None)  # Pagination handling
+        else:
+            print(f"Failed to retrieve pipelines for project {project_id}: {response.status_code}, {response.text}")
+            break
+    return pipelines
+
+# Function to get repository details from the pipeline
+def get_repository_from_pipeline(pipeline_id, project_id):
+    pipeline_details_url = f'https://dev.azure.com/{org_name}/{project_id}/_apis/pipelines/{pipeline_id}?api-version=7.1-preview.1'
+    response = requests.get(pipeline_details_url, headers=headers)
+    if response.status_code == 200:
+        pipeline_data = response.json()
+        repository = pipeline_data.get('repository', {})
+        return repository
+    else:
+        print(f"Failed to retrieve repository info for pipeline {pipeline_id}: {response.status_code}, {response.text}")
+        return None
+
+# Function to detect project type based on repository
+def detect_project_type_from_repo(repository):
+    # Check repository details for the project type
+    if repository:
+        repo_name = repository.get('name', '')
+        repo_url = repository.get('url', '')
+        
+        # Here you can use more sophisticated methods to detect project type.
+        # For example, check repo name or the repository content (e.g., package.json, pom.xml)
+        if 'node' in repo_name.lower() or 'package.json' in repo_url:
+            return 'Node.js'
+        elif 'java' in repo_name.lower() or 'pom.xml' in repo_url:
+            return 'Java (Maven)'
+        elif 'python' in repo_name.lower() or 'requirements.txt' in repo_url:
+            return 'Python'
+        elif 'ruby' in repo_name.lower() or 'Gemfile' in repo_url:
+            return 'Ruby'
+        elif 'go' in repo_name.lower() or 'go.mod' in repo_url:
+            return 'Go'
+        # Add more checks for other types if needed
+    return 'Unknown'  # Default if project type cannot be detected
+
+# Main logic
+def main():
+    projects = get_all_projects()
+    for project in projects:
+        project_name = project['name']
+        project_id = project['id']
+        print(f"Checking pipelines for project: {project_name}")
+        
+        pipelines = get_pipelines_for_project(project_id)
+        for pipeline in pipelines:
+            pipeline_id = pipeline['id']
+            print(f"  Checking pipeline: {pipeline['name']}")
+            
+            # Get repository details from the pipeline
+            repository = get_repository_from_pipeline(pipeline_id, project_id)
+            
+            if repository:
+                project_type = detect_project_type_from_repo(repository)
+                print(f"    Detected project type: {project_type}")
+            else:
+                print(f"    No repository information found for pipeline {pipeline_id}.")
+
+if __name__ == "__main__":
+    main()

@@ -8,6 +8,7 @@ import logging
 import yaml
 from azure.devops.connection import Connection
 from msrest.authentication import BasicAuthentication
+from azure.devops.v7_0.git.models import GitVersionDescriptor
 
 # Configure ArgParser
 parser = argparse.ArgumentParser(
@@ -44,11 +45,17 @@ git_client = connection.clients.get_git_client()
 
 # Function to fetch repository files and find the project type in project_type.yml
 def get_project_type_from_repo(repo_name, branch_name):
+    # Properly create the version descriptor using GitVersionDescriptor
+    version_descriptor = GitVersionDescriptor(
+        version=branch_name,
+        version_type="branch"  # Specify that the version is a branch
+    )
+
     # Get all files from the repository (no pagination)
     items = git_client.get_items(
         repository_id=repo_name,
         scope_path='/',  # Root directory
-        version_descriptor={'version': branch_name},
+        version_descriptor=version_descriptor,
         recursion_level='Full',  # Get all files in all subdirectories
     )
 
@@ -60,7 +67,7 @@ def get_project_type_from_repo(repo_name, branch_name):
             content = git_client.get_item_content(
                 repository_id=repo_name,
                 path=yaml_file_path,
-                version_descriptor={'version': branch_name}
+                version_descriptor=version_descriptor
             )
             try:
                 yaml_content = content.decode('utf-8')
@@ -84,4 +91,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

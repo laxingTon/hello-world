@@ -1,0 +1,87 @@
+import os
+import requests
+import yaml
+from base64 import b64encode
+
+# Configuration
+org_name = '<YOUR_ORG_NAME>'           # Replace with your Azure DevOps organization name
+project_name = '<YOUR_PROJECT_NAME>'   # Replace with your Azure DevOps project name
+repo_name = '<YOUR_REPO_NAME>'         # Replace with your repository name
+branch_name = '<BRANCH_NAME>'          # The branch you want to access, e.g., 'main'
+personal_access_token = '<YOUR_PAT>'   # Your personal access token
+
+# Construct the URL for the API request to list items in the repository (all directories)
+url = f'https://dev.azure.com/{org_name}/{project_name}/_apis/git/repositories/{repo_name}/items?versionDescriptor.version={branch_name}&scopePath=/&recursionLevel=Full&api-version=7.1-preview.1'
+
+# Make the request with authentication
+headers = {
+    'Content-Type': 'application/json',
+    'Authorization': f'Basic {b64encode(f":{personal_access_token}".encode()).decode()}'
+}
+
+# Function to get all files, including pagination handling
+def get_all_files(url, headers):
+    all_items = []
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            all_items.extend(data['value'])
+            url = data.get('continuationToken', None)  # If continuation token exists, use it to fetch more
+        else:
+            print(f"Failed to retrieve files: {response.status_code}, {response.text}")
+            break
+    return all_items
+
+# Function to read the YAML file and extract project types
+def get_project_types_from_yaml(files):
+    # Look for the YAML file
+    yaml_file_path = '/project_type.yml'
+    for file in files:
+        if file['path'] == yaml_file_path:
+            print(f"Found YAML file: {yaml_file_path}")
+            # Now read the YAML file
+            file_content_url = f"https://dev.azure.com/{org_name}/{project_name}/_apis/git/repositories/{repo_name}/items?versionDescriptor.version={branch_name}&scopePath={yaml_file_path}&api-version=7.1-preview.1"
+            response = requests.get(file_content_url, headers=headers)
+            if response.status_code == 200:
+                yaml_content = response.text
+                try:
+                    project_data = yaml.safe_load(yaml_content)
+                    return project_data.get('applications', [])
+                except yaml.YAMLError as e:
+                    print(f"Error reading YAML content: {e}")
+            else:
+                print(f"Failed to fetch content for YAML file: {response.status_code}, {response.text}")
+            break
+    return []
+
+# Main logic
+def main():
+    # Get all files from the repo
+    all_files = get_all_files(url, headers)
+
+    # Get project types from the YAML file
+    applications = get_project_types_from_yaml(all_files)
+
+    if applications:
+        for app in applications:
+            print(f"Application: {app['name']} - Project Type: {app['project_type']}")
+    else:
+        print("No project type information found in the repository.")
+
+if __name__ == "__main__":
+    main()
+
+
+# project_type.yml
+
+applications:
+  - name: app1
+    project_type: Node.js
+    path: /app1
+  - name: app2
+    project_type: Java (Maven)
+    path: /app2
+  - name: app3
+    project_type: Python
+    path: /app3

@@ -21,6 +21,7 @@ parser.add_argument("-o", "--org", help="Azure Devops Organization", default="vc
 parser.add_argument("-T", "--token", help="ADO Personal Access Token for Authorization")
 parser.add_argument("--repo-name", help="Azure DevOps Repo name to check for project types", required=True)
 parser.add_argument("--branch", help="Branch name to check (e.g., 'main')", default="main")
+parser.add_argument("--project-name", help="Azure DevOps Project name", required=True)  # New argument for project name
 parser.add_argument("-d", "--debug", action="store_true", help="Turn on debug logging")
 args = parser.parse_args()
 
@@ -44,19 +45,20 @@ connection = Connection(base_url=organization_url, creds=credentials)
 git_client = connection.clients.get_git_client()
 
 # Function to fetch repository files and find the project type in project_type.yml
-def get_project_type_from_repo(repo_name, branch_name):
+def get_project_type_from_repo(project_name, repo_name, branch_name):
     # Properly create the version descriptor using GitVersionDescriptor
     version_descriptor = GitVersionDescriptor(
-        version=branch_name,
-        version_type="branch"  # Specify that the version is a branch
+        version=branch_name,       # Name of the branch you want to check
+        version_type="branch"      # Ensure it's recognized as a branch
     )
 
     # Get all files from the repository (no pagination)
     items = git_client.get_items(
-        repository_id=repo_name,
-        scope_path='/',  # Root directory
-        version_descriptor=version_descriptor,
-        recursion_level='Full',  # Get all files in all subdirectories
+        project=project_name,      # Specify the project name
+        repository_id=repo_name,   # Specify the repository name
+        scope_path='/',            # Root directory
+        version_descriptor=version_descriptor,  # Correct format for version_descriptor
+        recursion_level='Full',    # Get all files in all subdirectories
     )
 
     # Look for the YAML file containing project types
@@ -65,7 +67,8 @@ def get_project_type_from_repo(repo_name, branch_name):
         if file.path == yaml_file_path:
             # Fetch the content of the YAML file
             content = git_client.get_item_content(
-                repository_id=repo_name,
+                project=project_name,    # Specify the project name
+                repository_id=repo_name, # Specify the repository name
                 path=yaml_file_path,
                 version_descriptor=version_descriptor
             )
@@ -81,7 +84,7 @@ def get_project_type_from_repo(repo_name, branch_name):
 # Main logic
 def main():
     # Fetch project types from the repo's YAML configuration
-    applications = get_project_type_from_repo(args.repo_name, args.branch)
+    applications = get_project_type_from_repo(args.project_name, args.repo_name, args.branch)
 
     if applications:
         for app in applications:

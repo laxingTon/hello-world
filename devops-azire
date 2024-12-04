@@ -72,8 +72,10 @@ def get_project_type_from_repo(project_name, repo_name, branch_name):
                 path=yaml_file_path,
                 version_descriptor=version_descriptor
             )
+            # Convert the content from generator to a string
+            content_bytes = b''.join(content)  # Concatenate the chunks into a single bytes object
+            yaml_content = content_bytes.decode('utf-8')  # Decode the byte object into a string
             try:
-                yaml_content = content.decode('utf-8')
                 project_data = yaml.safe_load(yaml_content)
                 return project_data.get('applications', [])
             except yaml.YAMLError as e:

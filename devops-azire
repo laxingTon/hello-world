@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+# pylint: disable=line-too-long
+"""
+    Python Script to Get Service Connection information for all projects
+"""
+import argparse
+import logging
+import pprint
+from azure.devops.connection import Connection
+from msrest.authentication import BasicAuthentication
+
+# Configure ArgParser
+parser = argparse.ArgumentParser(
+    prog="ado_service_connection.py",
+    description="Query Azure DevOps for Service Connections",
+    epilog="",
+    )
+
+parser.add_argument("-o", "--org", help="Azure Devops Organization", default="vcuvs")
+parser.add_argument("-T", "--token", help="ADO Personal Access Token for Authorization")
+parser.add_argument("-a", "--authSchemes", help="AuthSchemes to search for (comma delimited)", default=None)
+parser.add_argument("-t", "--type", help="Service Connection Type to search for", default=None)
+parser.add_argument("-d", "--debug", action="store_true", help="Turn on debug logging")
+
+args = parser.parse_args()
+
+# Configure logging
+if args.debug:
+    logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+else:
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
+logger.debug('Debug Logging turned on')
+
+
+
+organization = args.org
+personal_access_token = args.token
+organization_url = f'https://dev.azure.com/{organization}'
+
+credentials = BasicAuthentication('', personal_access_token)
+connection = Connection(base_url=organization_url, creds=credentials)
+
+projectIdList = []
+projectMap = {}
+
+core_client = connection.clients.get_core_client()
+get_projects_response = core_client.get_projects()
+
+if get_projects_response is not None:
+    for project in get_projects_response:
+        projectIdList.append(project.id)
+        projectMap[project.id]=project.name
+        # pprint.pprint(f"{project.id}:{project.name}")
+
+se_client = connection.clients.get_service_endpoint_client()
+seMap = {}
+
+
+if args.authSchemes is None:
+    ARGS_AUTH_SCHEMES = None
+else:
+    ARGS_AUTH_SCHEMES = args.authSchemes.split(',')
+
+
+for prjId in projectIdList:
+    get_service_endpoints_response = se_client.get_service_endpoints(project=prjId, type=args.type, auth_schemes=ARGS_AUTH_SCHEMES)
+    if get_service_endpoints_response is not None:
+        seMap[projectMap[prjId]] = []
+        for se in get_service_endpoints_response:
+            seMap[projectMap[prjId]].append([se.name,se.type,se.authorization.scheme,se.authorization.parameters])
+
+pprint.pprint(seMap)

@@ -1,0 +1,126 @@
+Since I can't directly create or upload screenshots in this environment, I'll provide a detailed description for each step and guide you on how to take the screenshots yourself for inclusion in your Azure DevOps Wiki.
+
+### Step-by-Step Guide for Adding Screenshots to Documentation
+
+You can take the screenshots while performing these actions in Azure DevOps and then insert them into your Wiki.
+
+---
+
+## **Project Admins: Onboard on Application/Project**
+
+### **Purpose**
+This section describes the steps for onboarding new Project Admins to an application or project in Azure DevOps.
+
+### **Steps**
+
+1. **Access Azure DevOps Organization:**
+   - **Action**: Go to [Azure DevOps Portal](https://dev.azure.com/) and log in.
+   - **Screenshot**: Capture the main dashboard or the login page after entering your credentials.
+
+2. **Navigate to Project Settings:**
+   - **Action**: Once logged in, click on the **Project Settings** gear icon (found in the lower-left corner).
+   - **Screenshot**: Take a screenshot showing the gear icon in the Azure DevOps portal.
+
+3. **Invite New Project Admin:**
+   - **Action**: Under **General**, click on **Permissions**. Then, click on **Add** and select **Project Admin**. Add the name or email of the new admin.
+   - **Screenshot**: Capture the permissions screen with the **Add** button highlighted, showing where to enter the user's name.
+
+4. **Set up Required Permissions:**
+   - **Action**: After adding the new admin, review and adjust permissions as necessary.
+   - **Screenshot**: Take a screenshot of the permissions page showing the different roles and permissions.
+
+5. **Send Onboarding Documentation:**
+   - **Action**: Send relevant documentation and guidelines to the new admin via email or another communication tool.
+   - **Screenshot**: You may capture a screenshot of the document shared, if applicable.
+
+---
+
+## **Project Admins: Set and Configure Quality Gates**
+
+### **Purpose**
+This section describes the steps for setting and configuring quality gates in Azure DevOps to enforce code quality standards.
+
+### **Steps**
+
+1. **Access Project Settings:**
+   - **Action**: Navigate to your project and open **Project Settings** (gear icon).
+   - **Screenshot**: Capture the project settings page where the gear icon is visible.
+
+2. **Navigate to Pipelines:**
+   - **Action**: Under **Pipelines**, select **Build** (or **Release Pipelines**, depending on your pipeline setup).
+   - **Screenshot**: Take a screenshot showing the Pipelines menu and where to click for the Build/Release Pipelines.
+
+3. **Select and Configure a Pipeline:**
+   - **Action**: Choose a pipeline to configure and click on it.
+   - **Screenshot**: Capture the pipelines list and highlight the pipeline you are selecting.
+
+4. **Integrate Quality Gate Tool (SonarQube or SonarCloud):**
+   - **Action**: Add a task for SonarQube or SonarCloud to the pipeline. Search for it in the **Add a Task** section.
+   - **Screenshot**: Take a screenshot of the **Add a Task** interface, with SonarQube/SonarCloud selected.
+
+5. **Configure Quality Gate Criteria:**
+   - **Action**: Define criteria for the quality gate (e.g., code coverage, duplication).
+   - **Screenshot**: Capture the settings page where you configure these criteria.
+
+6. **Verify Quality Gate Settings:**
+   - **Action**: Run the pipeline and verify that the quality gate is enforced. The build should fail if the gate criteria are not met.
+   - **Screenshot**: Capture the pipeline run page showing the build result (success or failure) based on the quality gate.
+
+7. **Monitor and Adjust Quality Gates:**
+   - **Action**: Monitor and adjust quality gate settings if necessary.
+   - **Screenshot**: Capture the page where you view the results from SonarQube or SonarCloud, showing code quality reports.
+
+---
+
+## **Project Admins: Update Project Info**
+
+### **Purpose**
+This section describes how Project Admins can update the project information, including project name, description, and other settings in Azure DevOps.
+
+### **Steps**
+
+1. **Navigate to Project Settings:**
+   - **Action**: Open **Project Settings** in Azure DevOps.
+   - **Screenshot**: Capture the Project Settings page.
+
+2. **Modify Project Details:**
+   - **Action**: In the **Overview** section, update the **Project Name** or **Description**.
+   - **Screenshot**: Take a screenshot showing the fields where you can update the project name and description.
+
+3. **Update Version Control Settings:**
+   - **Action**: In **Repositories**, configure settings for version control (e.g., default branches).
+   - **Screenshot**: Capture the settings page for repositories, showing where you can configure version control settings.
+
+4. **Adjust Notifications and Security:**
+   - **Action**: Go to **Notifications** and **Security** to modify these settings.
+   - **Screenshot**: Capture the **Notifications** and **Security** pages, showing the options you can adjust.
+
+5. **Update Project Administrators:**
+   - **Action**: Add or remove Project Administrators under **Permissions**.
+   - **Screenshot**: Capture the **Permissions** screen showing the list of Project Admins and their permissions.
+
+6. **Save Changes:**
+   - **Action**: Once all updates are made, click **Save** or **Save & Close** to confirm changes.
+   - **Screenshot**: Capture the Save button and the confirmation message.
+
+---
+
+### Adding Screenshots to Azure DevOps Wiki
+
+Once you have captured all the necessary screenshots:
+
+1. **Create Wiki Pages**: In your Azure DevOps project, navigate to the **Wiki** section and create a new page for each of the tasks described.
+2. **Upload Screenshots**: To add the screenshots, use the markdown syntax:
+
+   ```markdown
+   ![Description of Screenshot](attachment:ScreenshotFileName.png)
+   ```
+
+   - Click on **Attach Files** to upload the images you captured, and then use the markdown to display them.
+   - Alternatively, you can drag and drop the images directly into the Wiki page editor to insert them.
+
+3. **Format Text**: Ensure the text and images are formatted properly for readability. Use headers, bullet points, and sections to structure your documentation clearly.
+
+---
+
+This approach allows you to combine detailed instructions with visual aids, making the documentation more accessible and easier for new Project Admins to follow.

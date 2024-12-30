@@ -1,0 +1,97 @@
+import requests
+import json
+import base64
+
+# Define your Azure DevOps organization and personal access token (PAT)
+organization = "lekshmanans"  # Your Azure DevOps organization name
+pat = ""  # Your Personal Access Token (PAT)
+
+# Encode the PAT for Basic Auth
+encoded_pat = base64.b64encode(f":{pat}".encode()).decode()
+
+# Set up the headers with the PAT
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Basic {encoded_pat}"
+}
+
+# Define the project name and repository configuration
+project_name = "pipeline-onboaring-2"
+repo_name = "laxman-repo"
+
+# Function to get the project ID from the project name
+def get_project_id():
+    response = requests.get(
+        f"https://dev.azure.com/{organization}/_apis/projects/{project_name}?api-version=7.1",
+        headers=headers
+    )
+    if response.status_code == 200:
+        project_info = response.json()
+        return project_info["id"]
+    else:
+        print(f"Failed to retrieve project ID: {response.status_code}")
+        print(response.text)
+        return None
+
+# Function to check if the repository exists
+def repo_exists():
+    response = requests.get(
+        f"https://dev.azure.com/{organization}/{project_name}/_apis/git/repositories/{repo_name}?api-version=7.1",
+        headers=headers
+    )
+    print(response.status_code)
+    print(response.text)  # Print the detailed error message
+    return response.status_code == 200
+
+# Function to create a new repository
+def create_repo():
+    project_id = get_project_id()
+    if not project_id:
+        print("Unable to retrieve project ID. Aborting repository creation.")
+        return
+    
+    repo_config = {
+        "name": repo_name,
+        "project": {
+            "id": project_id  # Use the retrieved project ID here
+        }
+    }
+
+    response = requests.post(
+        f"https://dev.azure.com/{organization}/{project_name}/_apis/git/repositories?api-version=7.1",
+        headers=headers,
+        data=json.dumps(repo_config)
+    )
+    
+    print(response.status_code)
+    print(response.text)  # Print the detailed error message
+    if response.status_code == 201:  # 201 means created
+        print("Repository created successfully!")
+    else:
+        print(f"Failed to create repository: {response.status_code}")
+
+# Function to update an existing repository (e.g., update the description)
+def update_repo():
+    update_config = {
+        "name": repo_name,  # You can change the name or description here
+        "description": "Updated repository description"
+    }
+    response = requests.patch(
+        f"https://dev.azure.com/{organization}/{project_name}/_apis/git/repositories/{repo_name}?api-version=7.1",
+        headers=headers,
+        data=json.dumps(update_config)
+    )
+    print(response.status_code)
+    print(response.text)  # Print the detailed error message
+    if response.status_code == 200:
+        print("Repository updated successfully!")
+    else:
+        print(f"Failed to update repository: {response.status_code}")
+
+# Main logic
+if repo_exists():
+    print("Repository exists. Updating repository...")
+    update_repo()
+else:
+    print("Repository does not exist. Creating repository...")
+    create_repo()

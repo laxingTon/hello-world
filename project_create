@@ -1,0 +1,72 @@
+import requests
+import json
+
+# Define your Azure DevOps organization and personal access token (PAT)
+organization = ""
+pat = ""
+
+# Set up the headers with the PAT
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Basic {pat}"
+}
+
+# Define the project name and configuration
+project_name = "pipeline-onboaring-2"
+project_config = {
+    "name": project_name,
+    "description": "pipeline 2.0 onboarding",
+    "capabilities": {
+        "versioncontrol": {
+            "sourceControlType": "Git"
+        },
+        "processTemplate": {
+            "templateTypeId": "6b724908-ef14-45cf-84f8-768b5384da45"  # Agile process template ID
+        }
+    }
+}
+
+# Function to check if the project exists
+def project_exists():
+    response = requests.get(
+        f"https://dev.azure.com/{organization}/_apis/projects/{project_name}?api-version=7.1",
+        headers=headers
+    )
+    print(response)
+    return response.status_code == 200
+
+# Function to create a new project
+def create_project():
+    response = requests.post(
+        f"https://dev.azure.com/{organization}/_apis/projects?api-version=7.1",
+        headers=headers,
+        data=json.dumps(project_config)
+    )
+    print(response)
+    if response.status_code == 202:
+        print("Project creation initiated successfully!")
+    else:
+        print(f"Failed to create project: {response.status_code}")
+
+# Function to update an existing project
+def update_project():
+    update_config = {
+        "description": "Updated pipeline 2.0 onboarding description"
+    }
+    response = requests.patch(
+        f"https://dev.azure.com/{organization}/_apis/projects/{project_name}?api-version=7.1",
+        headers=headers,
+        data=json.dumps(update_config)
+    )
+    if response.status_code == 200:
+        print("Project updated successfully!")
+    else:
+        print(f"Failed to update project: {response.status_code}")
+
+# Main logic
+if project_exists():
+    print("Project exists. Updating project...")
+    update_project()
+else:
+    print("Project does not exist. Creating project...")
+    create_project()
